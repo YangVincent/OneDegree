@@ -64,14 +64,17 @@ def curl_website(site):
     # Write bytes that are utf-8 encoded
     crl.setopt(crl.WRITEDATA, b_obj)
 
-    # Perform file transfer
-    crl.perform()
-
     # Follow location
     crl.setopt(pycurl.FOLLOWLOCATION, True)
 
     # Set timeout (if the site is down)
     crl.setopt(pycurl.TIMEOUT, 5)
+
+    # Perform file transfer
+    try: 
+        crl.perform()
+    except pycurl.error as e:
+        return None, e
 
     # End curl session
     crl.close()
@@ -81,6 +84,7 @@ def curl_website(site):
 
     # Decode bytes stored in get_body to HTML and print the result
     #print('Output of GET request:\n%s' % get_body.decode('utf8')) 
+    return None, None
 
 
 if __name__ == "__main__":
@@ -89,9 +93,14 @@ if __name__ == "__main__":
 
     modified_count = 0
     unknown_count = 0
+    error_count = 0
 
-    for site in websites:
-        curl_website(site)
+    for site in websites[0:500]:
+        content, err = curl_website(site)
+        if err is not None:
+            print("Got an error for " + site + " -- error is " + str(err))
+            error_count = error_count + 1
+            continue
 
         if 'last-modified' in headers:
             print("Last modified:")
