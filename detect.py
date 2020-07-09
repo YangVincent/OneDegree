@@ -92,10 +92,11 @@ if __name__ == "__main__":
     websites = get_only_websites()
 
     modified_count = 0
+    modified_new_count = 0
     unknown_count = 0
     error_count = 0
 
-    for site in websites[0:500]:
+    for site in websites:
         content, err = curl_website(site)
         if err is not None:
             print("Got an error for " + site + " -- error is " + str(err))
@@ -106,12 +107,16 @@ if __name__ == "__main__":
             print("Last modified:")
             print(headers['last-modified'])
             print('-' * 20)
-            modified_count = modified_count + 1
+            if '2020' in headers['last-modified']:
+                modified_new_count = modified_new_count + 1
+            else:
+                modified_count = modified_count + 1
         else:
             print("Skipping")
             unknown_count = unknown_count + 1
 
-    print("Final modified count: " + str(modified_count))
+    print("Final modified new count (possibly new): " + str(modified_new_count))
+    print("Final modified old count (definitely old): " + str(modified_count))
     print("Final unknown count: " + str(unknown_count))
 
 
