@@ -5,6 +5,7 @@
 
 import csv
 import pycurl
+import hashlib
 from io import BytesIO
 
 headers = {}
@@ -84,9 +85,15 @@ def curl_website(site):
 
     # Decode bytes stored in get_body to HTML and print the result
     #print('Output of GET request:\n%s' % get_body.decode('utf8')) 
-    return None, None
+    #return None, None
+    try:
+        return get_body.decode('utf8'), None
+    except:
+        print("Decoding utf8 error. Returning none")
+        return None, None
 
 
+# Return a list of sites that MAY have changed.
 if __name__ == "__main__":
     #websites = get_websites()
     websites = get_only_websites()
@@ -96,27 +103,46 @@ if __name__ == "__main__":
     unknown_count = 0
     error_count = 0
 
+    changed = [] # list of sites that may have changed
+
+
+    # Store the hash of each site url -> hash
+    old_cache = {} # TODO(yangvincent): Upload old cache from file.
+    new_cache = {}
+
     for site in websites:
         content, err = curl_website(site)
+        new_cache[site] = hashlib.md5(content)
+
+        # We don't know if it's changed if we can't pull it, so ask people to check.
         if err is not None:
             print("Got an error for " + site + " -- error is " + str(err))
             error_count = error_count + 1
+            changed.append(site) 
             continue
 
+        # If we can tell that it definitely didn't change due to last-modified, skip.
         if 'last-modified' in headers:
             print("Last modified:")
             print(headers['last-modified'])
             print('-' * 20)
-            if '2020' in headers['last-modified']:
-                modified_new_count = modified_new_count + 1
-            else:
-                modified_count = modified_count + 1
-        else:
-            print("Skipping")
-            unknown_count = unknown_count + 1
+            # TODO(yangvincent): Make this detection more granular/sustainable.
+            if '2020' not in headers['last-modified']:
+                continue
+        # Check to see if our hashed results have changed
+        if site in old_cache and site in new_cache:
+            if old_cache[site] != new_cache[site]:
+                # Store that this site has changed
+                changed.append(site)
+            continue
+        # If it's missing from either of our caches, add.
+        changed.append(site)
+
 
     print("Final modified new count (possibly new): " + str(modified_new_count))
     print("Final modified old count (definitely old): " + str(modified_count))
     print("Final unknown count: " + str(unknown_count))
+
+    # TODO(yangvincent): Save new cache to file.
 
 
