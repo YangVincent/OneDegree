@@ -141,6 +141,7 @@ def find_changed_websites(websites, old_cache):
                     continue
             except ValueError as e:
                 changed.append(site)
+                continue
 
         # If it may have changed, check if we have this in our cache. If so, compare them and store if they're different
         if site in old_cache and site in new_cache:
@@ -184,11 +185,6 @@ def get_old_cache():
 if __name__ == "__main__":
     # websites = get_websites()
     websites = get_only_websites()
-
-    modified_count = 0
-    modified_new_count = 0
-    unknown_count = 0
-    error_count = 0
 
     # Retrieve our cache from last time
     old_cache = {}
