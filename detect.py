@@ -52,7 +52,6 @@ def get_only_websites():
 
 
 def curl_website(site):
-    print("site is " + site)
     b_obj = BytesIO()
     crl = pycurl.Curl()
 
@@ -89,30 +88,23 @@ def curl_website(site):
     try:
         return get_body.decode('utf8'), None
     except:
-        print("Decoding utf8 error. Returning none")
         return None, None
 
 
-# Return a list of sites that MAY have changed.
-if __name__ == "__main__":
-    #websites = get_websites()
-    websites = get_only_websites()
-
-    modified_count = 0
-    modified_new_count = 0
-    unknown_count = 0
-    error_count = 0
-
+# Returns a list of url's that've changed and the cache from this fetch.
+def find_changed_websites(websites, old_cache): # TODO(yangvincent): eventually take in old_cache
     changed = [] # list of sites that may have changed
 
-
     # Store the hash of each site url -> hash
-    old_cache = {} # TODO(yangvincent): Upload old cache from file.
     new_cache = {}
 
-    for site in websites:
+    for site in websites[0:10]:
         content, err = curl_website(site)
-        new_cache[site] = hashlib.md5(content)
+        # If we have an error or are missing content, manually check.
+        if not content:
+            changed.append(site)
+            continue
+        new_cache[site] = hashlib.md5(content.encode('utf-8')).hexdigest() # get a savable, comparable string
 
         # We don't know if it's changed if we can't pull it, so ask people to check.
         if err is not None:
@@ -123,9 +115,6 @@ if __name__ == "__main__":
 
         # If we can tell that it definitely didn't change due to last-modified, skip.
         if 'last-modified' in headers:
-            print("Last modified:")
-            print(headers['last-modified'])
-            print('-' * 20)
             # TODO(yangvincent): Make this detection more granular/sustainable.
             if '2020' not in headers['last-modified']:
                 continue
@@ -137,12 +126,51 @@ if __name__ == "__main__":
             continue
         # If it's missing from either of our caches, add.
         changed.append(site)
+    return changed, new_cache
 
 
-    print("Final modified new count (possibly new): " + str(modified_new_count))
-    print("Final modified old count (definitely old): " + str(modified_count))
-    print("Final unknown count: " + str(unknown_count))
+def write_results(changed, cache):
+    print("Starting to write results!")
+    # write out the changed sites
+    with open('changed_sites.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter = ',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for site in changed:
+            writer.writerow([site])
+
+    # Store our cache
+    with open('old_cache.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter = ',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for k in cache:
+            writer.writerow([k, cache[k]])
+
+
+def get_old_cache():
+    cache = {}
+    with open('old_cache.csv') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+        for cache_line in reader:
+            site, summary = cache_line[0], cache_line[1]
+            cache[site] = summary
+    return cache
+
+# Return a list of sites that MAY have changed.
+if __name__ == "__main__":
+    #websites = get_websites()
+    websites = get_only_websites()
+
+    modified_count = 0
+    modified_new_count = 0
+    unknown_count = 0
+    error_count = 0
+
+    # Retrieve our cache from last time
+    old_cache = {}
+    try:
+        old_cache = get_old_cache()
+    except IOError:
+        print("Old cache doesn't exist")
+
+    changed, cache = find_changed_websites(websites, old_cache)
 
     # TODO(yangvincent): Save new cache to file.
-
-
+    write_results(changed, cache)
