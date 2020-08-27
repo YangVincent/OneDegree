@@ -1,14 +1,23 @@
-# I've removed commas from 
-# 10,000 degrees
-# A Caring Mind, Inc
-# A Woman's Place Community Awareness & Treatment Services, Inc. (CATS)
+"""
+Instructions:
+1. Ensure there is a csv with 1 item per line (copy paste from google sheets) titled org_sites.csv
+2. Create a blank file named old_cache.csv
+3. Run python3 detect.py
+4. changed_sites.csv will show all sites that may have been changed in the last 6 months. If it isn't in this list, it
+has definitely not changed within the last 6 months.
+5. This script will take a long time to run!
+"""
 
+import sys
 import csv
 import pycurl
 import hashlib
+import datetime
+from datetime import date
 from io import BytesIO
 
 headers = {}
+NUM_WEBSITES_TO_SCAN = 1000
 
 def display_header(header_line):
     header_line = header_line.decode('iso-8859-1')
@@ -29,7 +38,7 @@ def display_header(header_line):
 
 
 """
-get_websites retrieves all websites from the csv.
+get_websites retrieves all websites from the csv. that Jessica sent
 """
 def get_websites():
     print("Getting Websites")
@@ -41,16 +50,21 @@ def get_websites():
     # Remove the header, which isn't a website
     return websites[1:]
 
+"""
+get_only_websites retrieves all websites from a csv that only holds URLs
+"""
 def get_only_websites():
     websites = []
-    with open('org2.csv') as f:
+    with open('org_sites.csv') as f:
         sites = f.readlines()
         for site in sites[1:]:
             websites.append(site.strip())
 
     return websites
 
-
+"""
+curl_website fetches headers and content from a website.
+"""
 def curl_website(site):
     b_obj = BytesIO()
     crl = pycurl.Curl()
@@ -92,13 +106,13 @@ def curl_website(site):
 
 
 # Returns a list of url's that've changed and the cache from this fetch.
-def find_changed_websites(websites, old_cache): # TODO(yangvincent): eventually take in old_cache
+def find_changed_websites(websites, old_cache):
     changed = [] # list of sites that may have changed
 
     # Store the hash of each site url -> hash
     new_cache = {}
 
-    for site in websites[0:10]:
+    for site in websites[0:NUM_WEBSITES_TO_SCAN]:
         content, err = curl_website(site)
         # If we have an error or are missing content, manually check.
         if not content:
@@ -115,20 +129,31 @@ def find_changed_websites(websites, old_cache): # TODO(yangvincent): eventually 
 
         # If we can tell that it definitely didn't change due to last-modified, skip.
         if 'last-modified' in headers:
-            # TODO(yangvincent): Make this detection more granular/sustainable.
-            if '2020' not in headers['last-modified']:
-                continue
-        # Check to see if our hashed results have changed
+            web_update_time = datetime.datetime.strptime(' '.join(headers['last-modified'].split(" ")[0:4]), '%a, %d %b %Y')
+            delta = datetime.datetime.now() - web_update_time
+            delta_days = str(delta).split(" ")[0]
+
+
+            # If it definitely hasn't changed in 6 months, skip
+            try:
+                if int(delta_days) > 30 * 6:
+                    # Assume 6 months, each of 30 days
+                    continue
+            except ValueError as e:
+                changed.append(site)
+
+        # If it may have changed, check if we have this in our cache. If so, compare them and store if they're different
         if site in old_cache and site in new_cache:
             if old_cache[site] != new_cache[site]:
-                # Store that this site has changed
                 changed.append(site)
             continue
-        # If it's missing from either of our caches, add.
         changed.append(site)
     return changed, new_cache
 
 
+"""
+Write results out to files to save for next time.
+"""
 def write_results(changed, cache):
     print("Starting to write results!")
     # write out the changed sites
@@ -143,7 +168,9 @@ def write_results(changed, cache):
         for k in cache:
             writer.writerow([k, cache[k]])
 
-
+"""
+Reads the previous cache if it exists.
+"""
 def get_old_cache():
     cache = {}
     with open('old_cache.csv') as csvfile:
@@ -155,7 +182,7 @@ def get_old_cache():
 
 # Return a list of sites that MAY have changed.
 if __name__ == "__main__":
-    #websites = get_websites()
+    # websites = get_websites()
     websites = get_only_websites()
 
     modified_count = 0
@@ -172,5 +199,8 @@ if __name__ == "__main__":
 
     changed, cache = find_changed_websites(websites, old_cache)
 
-    # TODO(yangvincent): Save new cache to file.
     write_results(changed, cache)
+
+    print("Results:")
+    print("Number of websites changed: " + str(len(changed)))
+    print("Number of websites total: " + str(len(websites)))
